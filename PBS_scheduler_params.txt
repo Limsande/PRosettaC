@@ -1,0 +1,2 @@
+PBS_O_WORKDIR=/mnt/PRosettaC/Patchdock_Results
+source /etc/bash.bashrc

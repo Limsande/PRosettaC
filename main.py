@@ -71,7 +71,7 @@ def main(name, argv):
         if Full:
                 Global = 1000
         else:
-                Global = 500
+                Global = 1
         Num_Results = utils.patchdock(Structs, [a + 1 for a in Anchors], min_value, max_value, Global, 2.0)
         if Num_Results == None:
                 log.write('INFO: PatchDock did not find any global docking solution within the geometrical constraints\n')
@@ -86,8 +86,9 @@ def main(name, argv):
         if Full:
                 Local = 50
         else:
-                Local = 10
+                Local = 1
         commands = [rs.local_docking('pd.' + str(i + 1) + '.pdb', Chains[0] + 'X', Chains[1] + 'Y', curr_dir + '/' + PT_params[0], curr_dir + '/' + PT_params[1], Local) for i in range(Num_Results)]
+        print(f'Sending commands to cluster: {commands}')
         jobs = cluster.runBatchCommands(commands, mem=params['RosettaDockMemory'])
         log.write('INFO: Local docking jobs: ' + str(jobs) + '\n')
         cluster.wait(jobs)
@@ -95,11 +96,13 @@ def main(name, argv):
         #Generating 100 constrained conformations for the entire linker based on PatchDock results
         log.write('INFO: Generating up to 100 constrained conformations for each local docking results\n')
         docking_solutions = glob.glob('*_docking_????.pdb')
+        print(f'Got solutions: {docking_solutions}')
         suffix = []
         for s in docking_solutions:
                 suffix.append([s, s.split('.')[1].split('_')])
                 suffix[-1][1] = suffix[-1][1][0] + '_' + str(int(suffix[-1][1][2]))
         commands = ['python ' + utils.SCRIPTS_FOL + '/constraint_generation.py ../' + Heads[0] + ' ../' + Heads[1] + ' ../' + Linkers + ' ' + s[1] + " " + s[0] + " " + ''.join(Chains) for s in suffix]
+        print(f'Sending commands to cluster: {commands}')
         jobs = cluster.runBatchCommands(commands, batch_size=12, mem=params['ProtacModelMemory'])
         log.write('INFO: Constrained conformation generation jobs: ' + str(jobs) + '\n')
         cluster.wait(jobs)

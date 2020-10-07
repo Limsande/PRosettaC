@@ -1,0 +1,6 @@
+Structures: CRBN.pdb BRD4.pdb
+Chains: A B
+Heads: lig_CRBN.sdf lig_BRD4.sdf
+Anchor atoms: 1 6
+Protac: protac.smi
+Full: False
