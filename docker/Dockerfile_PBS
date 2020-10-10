@@ -1,0 +1,114 @@
+################################################################################
+#                              PBSPRO TEST IMAGE                               #
+################################################################################
+#
+# To build this image, you need patch_dock_download.zip and rosetta_download.tgz
+# in the build directory.
+# 
+# Build with (substitute n_cpus=11 with number of cores you want to use for building)
+#   docker image build --build-arg n_cpus=11 -t pbs .
+#
+# Run with (adapt variables to your setup)
+#   N_CPUS=11
+#   MEM=8g
+#   MOUNT="$(pwd)/PRosettaC"  # path to the Git repo
+#   docker run -h master --name pbs --rm -ti --memory=$(MEM) --cpus=$(N_CPUS) -v "$(MOUNT)":/mnt/PRosettaC pbs
+#
+# PBS resources:
+#   * General Documentation: https://www.altair.com/pbs-works-documentation/
+#   * Admin Guide: https://www.altair.com/pdfs/pbsworks/PBSAdminGuide2020.1.pdf
+#   * Reference Guide: https://www.altair.com/pdfs/pbsworks/PBSReferenceGuide2020.1.pdf
+
+FROM	pbspro/pbspro
+
+# Number of cpu cores used for compiling Rosetta and Openbabel
+ARG     n_cpus=11
+
+USER	root
+RUN		yum install -y python3
+WORKDIR /
+RUN		echo root:root | chpasswd
+
+# Install Anaconda and create environment for PRosettaC.
+# See https://docs.anaconda.com/anaconda/install/silent-mode/ for Anaconda setup.
+RUN		yum install -y wget
+# libboost_python3.so.1.65.1: cannot open shared object file: No such file or directory --> libboost=1.65.1
+# (https://github.com/rdkit/rdkit/issues/1957)
+RUN		wget https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh -O anaconda.sh
+RUN		bash ./anaconda.sh -b -p /anaconda; \
+		eval "$(anaconda/bin/conda shell.bash hook)"; \
+		conda init; \
+		anaconda/bin/conda create -y -c rdkit -n prosettac-env rdkit libboost=1.65.1 scikit-learn
+# Additional requirements (for RDKit)
+RUN     yum install -y libXext
+
+# Install Rosetta.
+# Download from https://www.rosettacommons.org/software/academic
+# See https://www.rosettacommons.org/docs/latest/getting_started/Getting-Started#introductory-rosetta-tutorials_installation-on-mac-linux
+# for build instructions.
+COPY	rosetta_download.tgz /
+RUN		mkdir /rosetta
+RUN		tar zxf rosetta_download.tgz -C /rosetta --strip-components=1
+RUN		rm rosetta_download.tgz
+RUN		python3 -m pip install SCons
+RUN		yum install -y zlib-devel which && yum group install -y "Development Tools"
+WORKDIR	/rosetta/main/source
+RUN		python3 scons.py -j$n_cpus mode=release bin
+
+# Install openbabel
+# https://open-babel.readthedocs.io/en/latest/Installation/install.html#compiling-open-babel
+RUN		yum install -y cmake libxml2 unzip
+WORKDIR	/
+RUN		wget https://github.com/openbabel/openbabel/archive/openbabel-2-3-2.zip -O babel.zip
+RUN		unzip babel.zip; mkdir build
+WORKDIR	build
+RUN		cmake ../openbabel-openbabel-2-3-2
+RUN		make -j$c_cpus  # magic happens, build instructions state coffee break here
+RUN		make install
+
+# Include PatchDock into image (no need to install).
+WORKDIR	/
+COPY	patch_dock_download.zip /
+RUN		unzip patch_dock_download.zip
+RUN		rm patch_dock_download.zip
+# PatchDock needs 32-bit glibc (https://forums.centos.org/viewtopic.php?t=50006)
+RUN     yum install -y glibc.i686
+
+# Fix pbs_habitat: Unable to login as user postgres
+RUN     chown -R postgres:postgres /var/lib/pgsql
+RUN     mkdir /var/run/postgresql || chown -R postgres:postgres /run/postgresql/
+RUN     chmod 777 /tmp; chmod o+t /tmp
+
+# Fix pbs_iff: cannot connect to host. No Permission
+# https://community.openpbs.org/t/pbs-iff-error-returned-15031-no-permission-qstat-cannot-connect-to-server-host-errno-15007/700
+RUN     chmod 4755 /opt/pbs/sbin/pbs_{iff,rcp}
+
+# Fix qsub: could not create/open tmp file /var/tmp/pbsscrptjRR6aN for script
+RUN     chmod o+w /var/tmp 
+
+# Setup single-node cluster
+# https://community.openpbs.org/t/pbs-on-a-single-node-cpu/2083
+# https://www.discngine.com/blog/2014/6/27/install-torque-on-a-single-node-centos-64
+RUN     echo master np=11 > /var/spool/pbs/server_priv/nodes; \
+        sed -i 's/PBS_START_MOM=0/PBS_START_MOM=1/' /etc/pbs.conf
+RUN     echo '#!/bin/sh' > /root/setup.sh; \
+        echo "/opt/pbs/bin/qmgr -c 'set node master resources_available.ncpus=11'" >> /root/setup.sh; \
+        echo "/opt/pbs/bin/qmgr -c 'set node master resources_available.mem=8gb'"  >> /root/setup.sh; \
+        echo "/opt/pbs/bin/qterm -t quick; /opt/pbs/sbin/pbs_server" >> /root/setup.sh
+RUN     chmod u+x /root/setup.sh
+# Make /root/setup.sh run at container start
+RUN     sed -i '/adduser/ c adduser pbsuser && echo source \/etc\/bash.bashrc >> \/home\/pbsuser\/.bashrc' /entrypoint.sh; \
+        sed -i '/adduser/ a sh /root/setup.sh' /entrypoint.sh; \
+        sed -i '/sh \/root\/setup.sh/ a su - pbsuser' /entrypoint.sh
+
+# Set environment variables for PRosettaC in global bashrc.
+RUN		echo 'export PATH=/anaconda/bin:$PATH'  >> /etc/bash.bashrc
+RUN		echo unset LD_PRELOAD >> /etc/bash.bashrc
+RUN		echo export PATCHDOCK=/PatchDock  >> /etc/bash.bashrc
+RUN		echo export SCRIPTS_FOL=/mnt/PRosettaC/  >> /etc/bash.bashrc
+RUN		echo export ROSETTA_FOL=/rosetta/ >> /etc/bash.bashrc
+RUN		echo export OB=/usr/local/bin >> /etc/bash.bashrc
+RUN     echo 'export SCHEDULER_PARAMS=$SCRIPTS_FOL/PBS_scheduler_params.txt' >> /etc/bash.bashrc
+RUN		echo 'eval "$(/anaconda/bin/conda shell.bash hook)"' >> /etc/bash.bashrc
+RUN		echo conda activate prosettac-env >> /etc/bash.bashrc
+

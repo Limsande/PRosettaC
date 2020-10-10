@@ -1,0 +1,108 @@
+################################################################################
+#                         OPEN GRID ENGINE TEST IMAGE                          #
+################################################################################
+#
+# To build this image, you need patch_dock_download.zip and rosetta_download.tgz in the build directory.
+#
+# Build with  (substitute n_cpus=11 with number of cores you want to use for building)
+#   docker image build --build-arg n_cpus=11 -t sge .
+# 
+# Run with (adapt variables to your setup)
+#   N_CPUS=11
+#   MEM=8g
+#   MOUNT="$(pwd)/PRosettaC"  # path to the Git repo
+#   docker run -h master --name gridengine --rm -ti --memory=$(MEM) --cpus=$(N_CPUS) -v "$(MOUNT)":/mnt/PRosettaC sge bash
+#
+# Then in bash:
+# ```
+# /usr/bin/supervisord &
+# su testuser
+# ```
+#
+# To submit a test job:
+# ```
+# qsub /home/testuser/gridengine.submit
+# ```
+
+FROM	agaveapi/gridengine
+
+# Number of cpu cores used for compiling Rosetta and Openbabel
+ARG     n_cpus=11
+
+USER	root
+WORKDIR /
+
+# PRosettaC requires Python 3, which is, on Centos 6, only available from the SCL repo.
+# See https://www.2daygeek.com/install-python-3-on-centos-6/)
+# and https://www.softwarecollections.org/en/scls/rhscl/rh-python36/
+RUN     yum install -y centos-release-scl
+RUN		yum install -y rh-python36 && scl enable rh-python36 bash
+# Python 2.7 is also required.
+RUN     yum install -y python27; ln -s /opt/rh/python27/root/usr/bin/python /usr/bin/python2.7
+# https://stackoverflow.com/questions/20842732/libpython2-7-so-1-0-cannot-open-shared-object-file-no-such-file-or-directory
+RUN     echo 'export LD_LIBRARY_PATH=/opt/rh/python27/root/usr/lib64/:$LD_LIBRARY_PATH' >> /etc/bash.bashrc
+
+# Install Anaconda and create environment for PRosettaC.
+# See https://docs.anaconda.com/anaconda/install/silent-mode/ for Anaconda setup.
+RUN		yum install -y wget
+# libboost_python3.so.1.65.1: cannot open shared object file: No such file or directory --> libboost=1.65.1
+# (https://github.com/rdkit/rdkit/issues/1957)
+RUN		wget https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh -O anaconda.sh
+RUN		bash ./anaconda.sh -b -p /anaconda; \
+		eval "$(anaconda/bin/conda shell.bash hook)"; \
+		conda init; \
+		anaconda/bin/conda create -y -c rdkit -n prosettac-env rdkit libboost=1.65.1 scikit-learn
+
+# Install Rosetta.
+# Download from https://www.rosettacommons.org/software/academic
+# See https://www.rosettacommons.org/docs/latest/getting_started/Getting-Started#introductory-rosetta-tutorials_installation-on-mac-linux
+# for build instructions.
+COPY	rosetta_download.tgz /
+RUN		mkdir /rosetta
+RUN     yum install -y tar; \
+        tar zxf rosetta_download.tgz -C /rosetta --strip-components=1
+RUN		rm rosetta_download.tgz
+RUN		/opt/rh/rh-python36/root/usr/bin/pip install SCons
+RUN     yum install -y zlib-devel which
+# gcc from official repo is too old, use the devtools-2 repo as suggested here:
+# https://stackoverflow.com/questions/14674597/cc1plus-error-unrecognized-command-line-option-std-c11-with-g
+# and here:
+# https://gist.github.com/giwa/b1fb1e44dc0a7d270881
+RUN     wget http://people.centos.org/tru/devtools-2/devtools-2.repo -O /etc/yum.repos.d/devtools-2.repo;
+        yum install -y devtoolset-2-gcc devtoolset-2-binutils devtoolset-2-gcc-c++ devtoolset-2-gcc-gfortran
+RUN     ln -s /opt/rh/devtoolset-2/root/usr/bin/gcc /usr/bin/gcc; ln -s /opt/rh/devtoolset-2/root/usr/bin/g++ /usr/bin/c++
+WORKDIR	/rosetta/main/source
+RUN     /opt/rh/rh-python36/root/usr/bin/pip install argparse
+RUN		/opt/rh/rh-python36/root/usr/bin/python scons.py -j$n_cpus mode=release bin
+
+# Install openbabel
+# https://open-babel.readthedocs.io/en/latest/Installation/install.html#compiling-open-babel
+WORKDIR	/
+RUN		yum install -y cmake libxml2 unzip zlib
+RUN		wget https://github.com/openbabel/openbabel/archive/openbabel-2-3-2.zip -O babel.zip
+RUN		unzip babel.zip; rm babel.zip; mkdir build
+WORKDIR	build
+RUN		cmake ../openbabel-openbabel-2-3-2
+RUN		make -j$n_cpus  # magic happens, build instructions state coffee break here
+RUN		make install
+
+# Include PatchDock into image (no need to install).
+WORKDIR	/
+COPY	patch_dock_download.zip /
+RUN		unzip patch_dock_download.zip; rm patch_dock_download.zip
+# PatchDock needs 32-bit glibc (https://forums.centos.org/viewtopic.php?t=50006)
+RUN     yum install -y glibc.i686
+
+# Set environment variables for PRosettaC in global bashrc.
+RUN		echo 'export PATH=/anaconda/bin:$PATH'  >> /etc/bash.bashrc
+RUN		echo unset LD_PRELOAD >> /etc/bash.bashrc
+RUN		echo export PATCHDOCK=/PatchDock  >> /etc/bash.bashrc
+RUN		echo export SCRIPTS_FOL=/mnt/PRosettaC/  >> /etc/bash.bashrc
+RUN		echo export ROSETTA_FOL=/rosetta/ >> /etc/bash.bashrc
+RUN		echo export OB=/usr/local/bin >> /etc/bash.bashrc
+RUN		echo 'eval "$(/anaconda/bin/conda shell.bash hook)"' >> /etc/bash.bashrc
+RUN		echo conda activate prosettac-env >> /etc/bash.bashrc
+RUN		echo export DISPLAY=host.docker.internal:0.0 >> /etc/bash.bashrc
+RUN     echo 'export SCHEDULER_PARAMS=$SCRIPTS_FOL/SGE_scheduler_params.txt' >> /etc/bash.bashrc
+RUN     echo 'source /etc/bash.bashrc' >> /home/testuser/.bashrc
+
