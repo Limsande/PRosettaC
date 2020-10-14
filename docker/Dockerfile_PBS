@@ -12,7 +12,7 @@
 #   N_CPUS=11
 #   MEM=8g
 #   MOUNT="$(pwd)/PRosettaC"  # path to the Git repo
-#   docker run -h master --name pbs --rm -ti --memory=$(MEM) --cpus=$(N_CPUS) -v "$(MOUNT)":/mnt/PRosettaC pbs
+#   docker run -h master --name pbs --rm -ti --memory=${MEM} --cpus=${N_CPUS} -v "${MOUNT}":/mnt/PRosettaC pbs
 #
 # PBS resources:
 #   * General Documentation: https://www.altair.com/pbs-works-documentation/

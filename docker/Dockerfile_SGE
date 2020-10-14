@@ -11,7 +11,7 @@
 #   N_CPUS=11
 #   MEM=8g
 #   MOUNT="$(pwd)/PRosettaC"  # path to the Git repo
-#   docker run -h master --name gridengine --rm -ti --memory=$(MEM) --cpus=$(N_CPUS) -v "$(MOUNT)":/mnt/PRosettaC sge bash
+#   docker run -h master --name gridengine --rm -ti --memory=${MEM} --cpus=${N_CPUS} -v "${MOUNT}":/mnt/PRosettaC sge bash
 #
 # Then in bash:
 # ```
@@ -68,7 +68,7 @@ RUN     yum install -y zlib-devel which
 # https://stackoverflow.com/questions/14674597/cc1plus-error-unrecognized-command-line-option-std-c11-with-g
 # and here:
 # https://gist.github.com/giwa/b1fb1e44dc0a7d270881
-RUN     wget http://people.centos.org/tru/devtools-2/devtools-2.repo -O /etc/yum.repos.d/devtools-2.repo;
+RUN     wget http://people.centos.org/tru/devtools-2/devtools-2.repo -O /etc/yum.repos.d/devtools-2.repo; \
         yum install -y devtoolset-2-gcc devtoolset-2-binutils devtoolset-2-gcc-c++ devtoolset-2-gcc-gfortran
 RUN     ln -s /opt/rh/devtoolset-2/root/usr/bin/gcc /usr/bin/gcc; ln -s /opt/rh/devtoolset-2/root/usr/bin/g++ /usr/bin/c++
 WORKDIR	/rosetta/main/source
