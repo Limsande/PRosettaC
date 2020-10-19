@@ -59,14 +59,18 @@ class Cluster:
 
         def jobsRunning(self, job_ids: List[str]) -> bool:
                 """Return true, if any job in job_ids is currently running, false otherwise."""
+                return self.NJobsRunning(job_ids) > 0
+
+        def NJobsRunning(self, job_ids: List[str]) -> int:
+                """Return number of jobs in job_ids which are still running."""
                 jobs_running = self.getRunningJobIDs()
+                n_running = 0
                 for id in job_ids:
                         if id in jobs_running:
-                                return True
-                else:
-                        return False
+                                n_running += 1
+                return n_running
 
-        def runBatchCommands(self, commands: List[str], mem, batch_size=12) -> List[str]:
+        def runBatchCommands(self, commands: List[str], mem, batch_size=12, max_n_parallel=-1) -> List[str]:
                 """
                 Submit commands as jobs to the cluster in batches of batch_size. Return the assigned job IDs.
                 :param commands: Each element is a command placed on its own line in a job file
@@ -74,16 +78,27 @@ class Cluster:
                 :param batch_size: numbers of commands per job file (default 12)
                 :type batch_size: int
                 :param mem: amount of memory assigned to each job (in MB)
-                :type params: int
+                :type mem: int
+                :param max_n_parallel: allowed number of jobs submitted at once (default -1 for no limit)
+                :type max_n_parallel: int
                 :return: list of IDs of submitted jobs
                 :rtype: List[str]
                 """
                 jobs = []
                 batch_list = [commands[i:i + batch_size] for i in range(0, len(commands), batch_size)]
+                n_running = 0
                 for i, batch in enumerate(batch_list):
+                        if n_running == max_n_parallel:
+                                print(f'Already running {n_running} jobs. Waiting for some to finish before submitting next...')
+                                while n_running == max_n_parallel:
+                                        n_running = self.NJobsRunning(jobs)
+                                        if n_running == max_n_parallel:
+                                                print('...')
+                                                time.sleep(1000)
                         job_file = "job_batch_" + str(i) + ".sh"
                         self.writeJobFile(job_file, commands=batch, mem=mem)
                         jobs.append(self.submit(job_file))
+                        n_running += 1
                 return jobs
 
         def runCommands(self, commands):

@@ -83,6 +83,14 @@ def read_params(config_file: str) -> dict:
     except ValueError:
         sys.exit(f'Could not interpret ProtacModelMemory from {config_file} as megabyte (int): {params["ProtacModelMemory"]}')
     params['ClusterName'] = params.get('ClusterName', 'PBS')
+    try:
+        params['BatchSize'] = int(params.get('BatchSize', 12))
+    except ValueError:
+        sys.exit(f'Could not interpret BatchSize from {config_file} as integer: {params["BatchSize"]}')
+    try:
+        params['MaxParallelJobs'] = int(params.get('MaxParallelJobs', -1))
+    except ValueError:
+        sys.exit(f'Could not interpret MaxParallelJobs from {config_file} as integer: {params["MaxParallelJobs"]}')
 
     return params
 
