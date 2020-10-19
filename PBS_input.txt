@@ -4,3 +4,5 @@ Heads: lig_CRBN.sdf lig_BRD4.sdf
 Anchor atoms: 1 6
 Protac: protac.smi
 Full: False
+BatchSize: 1
+MaxParallelJobs: 1

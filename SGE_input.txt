@@ -5,3 +5,5 @@ Anchor atoms: 1 6
 Protac: protac.smi
 Full: False
 ClusterName: SGE
+BatchSize: 1
+MaxParallelJobs: 1

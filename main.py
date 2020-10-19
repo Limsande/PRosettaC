@@ -89,7 +89,11 @@ def main(name, argv):
                 Local = 1
         commands = [rs.local_docking('pd.' + str(i + 1) + '.pdb', Chains[0] + 'X', Chains[1] + 'Y', curr_dir + '/' + PT_params[0], curr_dir + '/' + PT_params[1], Local) for i in range(Num_Results)]
         print(f'Sending commands to cluster: {commands}')
-        jobs = cluster.runBatchCommands(commands, mem=params['RosettaDockMemory'])
+        jobs = cluster.runBatchCommands(
+                commands, batch_size=params['BatchSize'],
+                max_n_parallel=params['MaxParallelJobs'],
+                mem=params['RosettaDockMemory']
+        )
         log.write('INFO: Local docking jobs: ' + str(jobs) + '\n')
         cluster.wait(jobs)
 
@@ -103,7 +107,12 @@ def main(name, argv):
                 suffix[-1][1] = suffix[-1][1][0] + '_' + str(int(suffix[-1][1][2]))
         commands = ['python ' + utils.SCRIPTS_FOL + '/constraint_generation.py ../' + Heads[0] + ' ../' + Heads[1] + ' ../' + Linkers + ' ' + s[1] + " " + s[0] + " " + ''.join(Chains) for s in suffix]
         print(f'Sending commands to cluster: {commands}')
-        jobs = cluster.runBatchCommands(commands, batch_size=12, mem=params['ProtacModelMemory'])
+        jobs = cluster.runBatchCommands(
+                commands,
+                batch_size=params['BatchSize'],
+                max_n_parallel=params['MaxParallelJobs'],
+                mem=params['ProtacModelMemory']
+        )
         log.write('INFO: Constrained conformation generation jobs: ' + str(jobs) + '\n')
         cluster.wait(jobs)
         
