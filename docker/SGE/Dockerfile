@@ -2,6 +2,11 @@
 #                         OPEN GRID ENGINE TEST IMAGE                          #
 ################################################################################
 #
+# DUE TO CentOS 6 END OF LIFE, THIS IMAGE CAN NO LONGER BE BUILT! But since the
+# base image still works, a workaround may be changing all yum repos to their
+# archive mirrors (like vault.centos.org, and archives.fedoraproject.org for EPEL),
+# and building Python 3.6 etc. from source.
+#
 # This Docker image defines a single-node Open Grid Engine cluster and also
 # installs all dependencies of PRosettaC. The cluster starts automatically when
 # you start a container from this image. To run PRosettaC, you have to mount
