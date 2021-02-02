@@ -1,3 +1,14 @@
+This is a fork of the [PRosettaC repo](https://github.com/LondonLab/PRosettaC). We made some additions
+to run it more easily in our lab. This includes:
+* a new parameter, BatchSize, controlling the number of commands in a job file, i.e. the computational load each job file puts on its cluster node
+* a new parameter, MaxParallelJobs, controlling the number of job files submitted at once, i.e. the computational load PRosettaC puts on the whole cluster
+
+These settings can be set in the configuration file (see "Usage", and also "Additional Parameters"). They might be helpful when you run PRosettaC, but not on a dedicated cluster, so that PRosettaC has to share resources with other processes on the cluster. They are not active by default.
+
+NOTE that this functionality has not been tested for a Sun Grid Endinge/Open Grid Engine scheduler!
+
+
+
 Installation requirements for PRosettaC:
 
 1. Load python 3 by using:
