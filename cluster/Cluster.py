@@ -98,6 +98,7 @@ class Cluster:
                         job_file = "job_batch_" + str(i) + ".sh"
                         self.writeJobFile(job_file, commands=batch, mem=mem)
                         jobs.append(self.submit(job_file))
+                        n_running += 1
                 return jobs
 
         def runCommands(self, commands):
