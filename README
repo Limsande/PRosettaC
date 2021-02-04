@@ -5,7 +5,7 @@ to run it more easily in our lab. This includes:
 
 These settings can be set in the configuration file (see "Usage", and also "Additional Parameters"). They might be helpful when you run PRosettaC, but not on a dedicated cluster, so that PRosettaC has to share resources with other processes on the cluster. They are not active by default.
 
-NOTE that this functionality has not been tested for a Sun Grid Endinge/Open Grid Engine scheduler!
+NOTE that this functionality has only been tested with a PBS scheduler, because CentOS 6 end of life broke our SGE test system. However, it *should work*™ with SGE, too, because it is implemented in the more abstract scheduler interface. No change was made to any scheduler-specific code.
 
 
 
