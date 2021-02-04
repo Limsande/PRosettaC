@@ -10,14 +10,21 @@
 # To build this image, you need patch_dock_download.zip and rosetta_download.tgz
 # in the build directory.
 # 
-# Build with (substitute n_cpus=11 with number of cores you want to use for building)
-#   docker image build --build-arg n_cpus=11 -t pbs .
+# Build with (substitute n_cpus=11 with number of cores you want to use for building,
+# n_cpus_cluster and mem_cluster with number of cores and memory to be used by the cluster,
+# respectively)
+#   docker image build --build-arg n_cpus=11 --build-arg n_cpus_cluster=11 --build-arg mem_cluster=8g -t pbs .
+#
+# A process in a container cannot know about resource quotas imposed on the container
+# (i.e. sees entire host resources, see https://github.com/moby/moby/issues/20770).
+# And because of how the start-up process for containers of this image work, we cannot
+# inject the quotas as environment variables, either. Therefore, we have to define them
+# already at build time via above build arguments. But fortunately, thanks to Docker's
+# caching, rebuilding takes only an instant.
 #
 # Run with (adapt variables to your setup)
-#   N_CPUS=11
-#   MEM=8g
-#   MOUNT="$(pwd)/PRosettaC"  # path to the Git repo
-#   docker run -h master --name pbs --rm -ti --memory=${MEM} --cpus=${N_CPUS} -v "${MOUNT}":/mnt/PRosettaC pbs
+#   MOUNT="$(pwd)"  # path to this Git repo
+#   docker run -h master --name pbs --rm -ti -v "${MOUNT}":/mnt/PRosettaC pbs
 #
 # PBS resources:
 #   * General Documentation: https://www.altair.com/pbs-works-documentation/
@@ -26,8 +33,13 @@
 
 FROM	pbspro/pbspro
 
+# Some variable definitions 
+# (can bei overwritten by values passed via --build-arg):
 # Number of cpu cores used for compiling Rosetta and Openbabel
 ARG     n_cpus=11
+# Resource quota for cluster
+ARG     n_cpus_cluster=11
+ARG     mem_cluster=8g
 
 USER	root
 RUN		yum install -y python3
@@ -94,11 +106,11 @@ RUN     chmod o+w /var/tmp
 # Setup single-node cluster
 # https://community.openpbs.org/t/pbs-on-a-single-node-cpu/2083
 # https://www.discngine.com/blog/2014/6/27/install-torque-on-a-single-node-centos-64
-RUN     echo master np=11 > /var/spool/pbs/server_priv/nodes; \
-        sed -i 's/PBS_START_MOM=0/PBS_START_MOM=1/' /etc/pbs.conf
+RUN     echo master np=$n_cpus_cluster > /var/spool/pbs/server_priv/nodes
+RUN     sed -i 's/PBS_START_MOM=0/PBS_START_MOM=1/' /etc/pbs.conf
 RUN     echo '#!/bin/sh' > /root/setup.sh; \
-        echo "/opt/pbs/bin/qmgr -c 'set node master resources_available.ncpus=11'" >> /root/setup.sh; \
-        echo "/opt/pbs/bin/qmgr -c 'set node master resources_available.mem=8gb'"  >> /root/setup.sh; \
+        echo "/opt/pbs/bin/qmgr -c \"set node master resources_available.ncpus=$n_cpus_cluster\"" >> /root/setup.sh; \
+        echo "/opt/pbs/bin/qmgr -c \"set node master resources_available.mem=$mem_cluster\""  >> /root/setup.sh; \
         echo "/opt/pbs/bin/qterm -t quick; /opt/pbs/sbin/pbs_server" >> /root/setup.sh
 RUN     chmod u+x /root/setup.sh
 # Make /root/setup.sh run at container start
@@ -116,4 +128,6 @@ RUN		echo export OB=/usr/local/bin >> /etc/bash.bashrc
 RUN     echo 'export SCHEDULER_PARAMS=$SCRIPTS_FOL/PBS_scheduler_params.txt' >> /etc/bash.bashrc
 RUN		echo 'eval "$(/anaconda/bin/conda shell.bash hook)"' >> /etc/bash.bashrc
 RUN		echo conda activate prosettac-env >> /etc/bash.bashrc
+
+RUN     echo "root:" | chpasswd
 
