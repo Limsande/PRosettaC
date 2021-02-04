@@ -5,4 +5,4 @@ Anchor atoms: 1 6
 Protac: protac.smi
 Full: False
 BatchSize: 1
-MaxParallelJobs: 1
+MaxParallelJobs: 2

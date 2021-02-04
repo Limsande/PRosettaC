@@ -86,7 +86,7 @@ def main(name, argv):
         if Full:
                 Local = 50
         else:
-                Local = 1
+                Local = 5
         commands = [rs.local_docking('pd.' + str(i + 1) + '.pdb', Chains[0] + 'X', Chains[1] + 'Y', curr_dir + '/' + PT_params[0], curr_dir + '/' + PT_params[1], Local) for i in range(Num_Results)]
         print(f'Sending commands to cluster: {commands}')
         jobs = cluster.runBatchCommands(
